@@ -1,3 +1,5 @@
+console.log('Script loaded!');
+
 // Game State
 let board = [];
 let solution = [];
@@ -45,17 +47,14 @@ function createBoardCells() {
 // Setup event listeners
 function setupEventListeners() {
     newGameButton.addEventListener('click', newGame);
-
     difficultySelect.addEventListener('change', newGame);
-
     boardElement.addEventListener('input', handleInput);
-    boardElement.addEventListener('focus', handleFocus);
+    boardElement.addEventListener('focus', handleFocus, true);
     boardElement.addEventListener('keydown', handleKeydown);
 }
 
 // Start new game
 function newGame() {
-    // Reset state
     stopTimer();
     seconds = 0;
     errors = 0;
@@ -65,118 +64,81 @@ function newGame() {
     messageElement.textContent = '';
     messageElement.className = 'message';
 
-    // Generate puzzle
     const difficulty = difficultySelect.value;
     generatePuzzle(difficultyLevels[difficulty]);
-
-    // Render board
     renderBoard();
-
-    // Start timer
     startTimer();
 }
 
 // Generate a valid Sudoku puzzle
 function generatePuzzle(clues) {
-    // Create empty board
-    board = Array(81).fill(0);
-    givenCells = Array(81).fill(false);
+    // Create empty board array
+    board = new Array(81);
+    for (let i = 0; i < 81; i++) board[i] = 0;
+
+    givenCells = new Array(81);
+    for (let i = 0; i < 81; i++) givenCells[i] = false;
 
     // Generate solved board
-    solveSudoku(board, true);
+    fillBoard(board);
+
+    console.log('Board filled, non-zero count:', board.filter(x => x !== 0).length);
+    console.log('First row:', board.slice(0, 9));
 
     // Store solution
-    solution = [...board];
+    solution = board.slice();
 
     // Remove numbers to create puzzle
     const cellsToRemove = 81 - clues;
     const positions = shuffleArray([...Array(81).keys()]);
 
-    let removed = 0;
-    for (const pos of positions) {
-        if (removed >= cellsToRemove) break;
-
-        const backup = board[pos];
-        board[pos] = 0;
-
-        // Check if still has unique solution
-        const boardCopy = [...board];
-        if (countSolutions(boardCopy) === 1) {
-            removed++;
-        } else {
-            board[pos] = backup;
-        }
+    for (let i = 0; i < cellsToRemove; i++) {
+        board[positions[i]] = 0;
     }
 
     // Mark given cells
     for (let i = 0; i < 81; i++) {
         givenCells[i] = board[i] !== 0;
     }
+
+    console.log('Puzzle generated with', board.filter(x => x !== 0).length, 'clues');
 }
 
-// Solve Sudoku using backtracking
-function solveSudoku(board, randomize = false) {
-    const emptyCell = findEmptyCell(board);
-    if (!emptyCell) return true;
+// Fill board using backtracking with randomization
+function fillBoard(b) {
+    return solve(b, 0);
+}
 
-    const index = emptyCell;
-    const numbers = randomize ? shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]) : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+function solve(b, pos) {
+    if (pos >= 81) return true;
+
+    const numbers = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     for (const num of numbers) {
-        if (isValidPlacement(board, index, num)) {
-            board[index] = num;
-            if (solveSudoku(board, randomize)) return true;
-            board[index] = 0;
+        if (canPlace(b, pos, num)) {
+            b[pos] = num;
+            if (solve(b, pos + 1)) {
+                return true;
+            }
+            b[pos] = 0;
         }
     }
 
     return false;
 }
 
-// Count solutions (stop after finding 2)
-function countSolutions(board, count = { value: 0 }) {
-    if (count.value >= 2) return count.value;
-
-    const emptyCell = findEmptyCell(board);
-    if (!emptyCell) {
-        count.value++;
-        return count.value;
-    }
-
-    const index = emptyCell;
-    for (let num = 1; num <= 9; num++) {
-        if (isValidPlacement(board, index, num)) {
-            board[index] = num;
-            countSolutions(board, count);
-            board[index] = 0;
-            if (count.value >= 2) return count.value;
-        }
-    }
-
-    return count.value;
-}
-
-// Find empty cell
-function findEmptyCell(board) {
-    for (let i = 0; i < 81; i++) {
-        if (board[i] === 0) return i;
-    }
-    return null;
-}
-
-// Check if placement is valid
-function isValidPlacement(board, index, num) {
-    const row = Math.floor(index / 9);
-    const col = index % 9;
+function canPlace(b, pos, num) {
+    const row = Math.floor(pos / 9);
+    const col = pos % 9;
 
     // Check row
     for (let c = 0; c < 9; c++) {
-        if (board[row * 9 + c] === num) return false;
+        if (b[row * 9 + c] === num) return false;
     }
 
     // Check column
     for (let r = 0; r < 9; r++) {
-        if (board[r * 9 + col] === num) return false;
+        if (b[r * 9 + col] === num) return false;
     }
 
     // Check 3x3 box
@@ -184,16 +146,16 @@ function isValidPlacement(board, index, num) {
     const boxCol = Math.floor(col / 3) * 3;
     for (let r = boxRow; r < boxRow + 3; r++) {
         for (let c = boxCol; c < boxCol + 3; c++) {
-            if (board[r * 9 + c] === num) return false;
+            if (b[r * 9 + c] === num) return false;
         }
     }
 
     return true;
 }
 
-// Shuffle array
+// Shuffle array using Fisher-Yates
 function shuffleArray(array) {
-    const arr = [...array];
+    const arr = array.slice();
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -208,12 +170,11 @@ function renderBoard() {
         const value = board[index];
         cell.value = value === 0 ? '' : value;
         cell.classList.remove('given', 'highlighted', 'conflict');
+        cell.readOnly = false;
 
         if (givenCells[index]) {
             cell.classList.add('given');
             cell.readOnly = true;
-        } else {
-            cell.readOnly = false;
         }
     });
 }
@@ -223,20 +184,14 @@ function handleInput(e) {
     const cell = e.target;
     const index = parseInt(cell.dataset.index);
 
-    // Only allow 1-9
     const value = cell.value;
     if (value && !/^[1-9]$/.test(value)) {
         cell.value = '';
         return;
     }
 
-    // Update board state
     board[index] = value ? parseInt(value) : 0;
-
-    // Check for conflicts
     checkConflicts();
-
-    // Check if puzzle is complete
     checkWin();
 }
 
@@ -291,7 +246,6 @@ function checkConflicts() {
     const cells = boardElement.querySelectorAll('.cell');
     cells.forEach(cell => cell.classList.remove('conflict'));
 
-    // Check each cell for conflicts
     for (let i = 0; i < 81; i++) {
         if (board[i] === 0) continue;
 
@@ -323,13 +277,12 @@ function checkConflicts() {
         if (!hasConflict) {
             const boxRow = Math.floor(row / 3) * 3;
             const boxCol = Math.floor(col / 3) * 3;
-            outer:
             for (let r = boxRow; r < boxRow + 3; r++) {
                 for (let c = boxCol; c < boxCol + 3; c++) {
                     const idx = r * 9 + c;
                     if (idx !== i && board[idx] === board[i]) {
                         hasConflict = true;
-                        break outer;
+                        break;
                     }
                 }
             }
@@ -337,10 +290,7 @@ function checkConflicts() {
 
         if (hasConflict) {
             cells[i].classList.add('conflict');
-
-            // Increment error if this is a new wrong entry (not a given cell)
             if (!givenCells[i] && board[i] !== solution[i]) {
-                // Only count error once per cell
                 if (!cells[i].dataset.errorCounted) {
                     errors++;
                     updateErrorDisplay();
@@ -355,10 +305,8 @@ function checkConflicts() {
 
 // Check if puzzle is complete
 function checkWin() {
-    // Check if all cells are filled
     if (board.includes(0)) return;
 
-    // Check if solution is correct
     const isCorrect = board.every((val, idx) => val === solution[idx]);
 
     if (isCorrect) {
